@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <octomap/OcTreeNode.h>
+#include <octomap/OcTreeStamped.h>
 #include <octomap/OccupancyOcTreeBase.h>
 
 struct RGBColor{ float r, g, b; };
@@ -180,6 +181,150 @@ namespace octomap {
     };
     /// static member to ensure static initialization (only once)
     static StaticMemberInitializer roughOcTreeMemberInit;
+
+  };
+}
+  //////////////////// Stamped
+namespace octomap {
+  
+  // forward declaraton for "friend"
+  class RoughOcTreeStamped;
+  
+  // node definition
+  class RoughOcTreeNodeStamped : public OcTreeNodeStamped {    
+  public:
+    friend class RoughOcTreeStamped; // needs access to node children (inherited)
+
+  public:
+    RoughOcTreeNodeStamped() : OcTreeNodeStamped(), rough(NAN) {}
+
+    RoughOcTreeNodeStamped(const RoughOcTreeNodeStamped& rhs) : OcTreeNodeStamped(rhs), rough(rhs.rough) {}
+
+    bool operator==(const RoughOcTreeNodeStamped& rhs) const{
+      return (rhs.value == value && rhs.timestamp == timestamp && rhs.rough == rough);
+    }
+    
+    void copyData(const RoughOcTreeNodeStamped& from){
+      OcTreeNode::copyData(from);
+      this->timestamp = from.getTimestamp();
+      this->rough =  from.getRough();
+    }
+        
+    inline float getRough() const { return rough; }
+    inline void  setRough(float c) {this->rough = c; }
+
+    float getRough() { return rough; }
+
+    // RGBColor getRoughColor() { return getRGBColor(getRough()); }
+    RGBColor getRoughColor(float rough_=NAN) { 
+      if (isnan(rough_)) rough_=getRough();
+      return getBWColor(rough_); 
+    }
+
+    // has any color been integrated? (pure white is very unlikely...)
+    inline bool isRoughSet() const { 
+      return !isnan(rough); 
+    }
+
+    void updateRoughChildren();
+
+    float getAverageChildRough() const;
+  
+    // file I/O
+    std::istream& readData(std::istream &s);
+    std::ostream& writeData(std::ostream &s) const;
+    
+  protected:
+    float rough;
+  };
+
+
+  // tree definition
+  class RoughOcTreeStamped : public OccupancyOcTreeBase <RoughOcTreeNodeStamped> {
+
+  public:
+    /// Default constructor, sets resolution of leafs
+    RoughOcTreeStamped(double resolution);
+      
+    /// virtual constructor: creates a new object of same type
+    /// (Covariant return type requires an up-to-date compiler)
+    RoughOcTreeStamped* create() const {return new RoughOcTreeStamped(resolution); }
+
+    std::string getTreeType() const {return "RoughOcTreeStamped";}
+    
+     /**
+     * Prunes a node when it is collapsible. This overloaded
+     * version only considers the node occupancy for pruning,
+     * different colors of child nodes are ignored.
+     * @return true if pruning was successful
+     */
+    virtual bool pruneNode(RoughOcTreeNodeStamped* node);
+    
+    virtual bool isNodeCollapsible(const RoughOcTreeNodeStamped* node) const;
+       
+    // set node color at given key or coordinate. Replaces previous color.
+    RoughOcTreeNodeStamped* setNodeRough(const OcTreeKey& key, float rough);
+
+    RoughOcTreeNodeStamped* setNodeRough(float x, float y, 
+                                 float z, float rough) {
+      OcTreeKey key;
+      if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NULL;
+      return setNodeRough(key,rough);
+    }
+
+    // integrate color measurement at given key or coordinate. Average with previous color
+    RoughOcTreeNodeStamped* averageNodeRough(const OcTreeKey& key, float rough);
+    
+    RoughOcTreeNodeStamped* averageNodeRough(float x, float y, 
+                                      float z, float rough) {
+      OcTreeKey key;
+      if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NULL;
+      return averageNodeRough(key,rough);
+    }
+
+    // integrate color measurement at given key or coordinate. Average with previous color
+    RoughOcTreeNodeStamped* integrateNodeRough(const OcTreeKey& key, float rough);
+    
+    RoughOcTreeNodeStamped* integrateNodeRough(float x, float y, 
+                                      float z, float rough) {
+      OcTreeKey key;
+      if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NULL;
+      return integrateNodeRough(key,rough);
+    }
+
+    // update inner nodes, sets color to average child color
+    void updateInnerOccupancy();
+
+    // uses gnuplot to plot a RGB histogram in EPS format
+    void writeRoughHistogram(std::string filename);
+    
+  protected:
+    void updateInnerOccupancyRecurs(RoughOcTreeNodeStamped* node, unsigned int depth);
+
+    /**
+     * Static member object which ensures that this OcTree's prototype
+     * ends up in the classIDMapping only once. You need this as a 
+     * static member in any derived octree class in order to read .ot
+     * files through the AbstractOcTree factory. You should also call
+     * ensureLinking() once from the constructor.
+     */
+    class StaticMemberInitializer{
+       public:
+         StaticMemberInitializer() {
+           RoughOcTreeStamped* tree = new RoughOcTreeStamped(0.1);
+           tree->clearKeyRays();
+           AbstractOcTree::registerTreeType(tree);
+         }
+
+         /**
+         * Dummy function to ensure that MSVC does not drop the
+         * StaticMemberInitializer, causing this tree failing to register.
+         * Needs to be called from the constructor of this octree.
+         */
+         void ensureLinking() {};
+    };
+    /// static member to ensure static initialization (only once)
+    static StaticMemberInitializer roughOcTreeStampedMemberInit;
 
   };
 

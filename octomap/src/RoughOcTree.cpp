@@ -227,3 +227,198 @@ namespace octomap {
   RoughOcTree::StaticMemberInitializer RoughOcTree::roughOcTreeMemberInit;
 
 } // end namespace
+
+namespace octomap {
+
+
+  // node implementation  --------------------------------------
+  std::ostream& RoughOcTreeNodeStamped::writeData(std::ostream &s) const {
+    s.write((const char*) &value, sizeof(value)); // occupancy
+    s.write((const char*) &rough, sizeof(rough)); // rough
+
+    return s;
+  }
+
+  std::istream& RoughOcTreeNodeStamped::readData(std::istream &s) {
+    s.read((char*) &value, sizeof(value)); // occupancy
+    s.read((char*) &rough, sizeof(rough)); // rough
+
+    return s;
+  }
+
+  float RoughOcTreeNodeStamped::getAverageChildRough() const {
+    int m = 0;
+    int c = 0;
+
+    if (children != NULL){
+      for (int i=0; i<8; i++) {
+        RoughOcTreeNodeStamped* child = static_cast<RoughOcTreeNodeStamped*>(children[i]);
+
+        if (child != NULL && child->isRoughSet()) {
+          m += child->getRough();
+          ++c;
+        }
+      }
+    }
+
+    if (c > 0) {
+      m /= c;
+      return m;
+    }
+    else { // no child had a color other than white
+      return NAN;
+    }
+  }
+
+
+  void RoughOcTreeNodeStamped::updateRoughChildren() {
+    rough = getAverageChildRough();
+  }
+
+
+  // tree implementation  --------------------------------------
+  RoughOcTreeStamped::RoughOcTreeStamped(double in_resolution)
+  : OccupancyOcTreeBase<RoughOcTreeNodeStamped>(in_resolution) {
+    roughOcTreeStampedMemberInit.ensureLinking();
+  }
+
+  RoughOcTreeNodeStamped* RoughOcTreeStamped::setNodeRough(const OcTreeKey& key,
+                                             float rough) {
+    RoughOcTreeNodeStamped* n = search (key);
+    if (n != 0) {
+      n->setRough(rough);
+    }
+    return n;
+  }
+
+  bool RoughOcTreeStamped::pruneNode(RoughOcTreeNodeStamped* node) {
+    if (!isNodeCollapsible(node))
+      return false;
+
+    // set value to children's values (all assumed equal)
+    node->copyData(*(getNodeChild(node, 0)));
+
+    if (node->isRoughSet()) // TODO check
+      node->setRough(node->getAverageChildRough());
+
+    // delete children
+    for (unsigned int i=0;i<8;i++) {
+      deleteNodeChild(node, i);
+    }
+    delete[] node->children;
+    node->children = NULL;
+
+    return true;
+  }
+
+  bool RoughOcTreeStamped::isNodeCollapsible(const RoughOcTreeNodeStamped* node) const{
+    // all children must exist, must not have children of
+    // their own and have the same occupancy probability
+    if (!nodeChildExists(node, 0))
+      return false;
+
+    const RoughOcTreeNodeStamped* firstChild = getNodeChild(node, 0);
+    if (nodeHasChildren(firstChild))
+      return false;
+
+    for (unsigned int i = 1; i<8; i++) {
+      // compare nodes only using their occupancy, ignoring color for pruning
+      if (!nodeChildExists(node, i) || nodeHasChildren(getNodeChild(node, i)) || !(getNodeChild(node, i)->getValue() == firstChild->getValue()))
+        return false;
+    }
+
+    return true;
+  }
+
+  RoughOcTreeNodeStamped* RoughOcTreeStamped::averageNodeRough(const OcTreeKey& key,
+                                                 float rough) {
+    RoughOcTreeNodeStamped* n = search(key);
+    if (n != 0) {
+      if (n->isRoughSet()) {
+        float prev_rough = n->getRough();
+        n->setRough((prev_rough + rough)/2);
+      }
+      else {
+        n->setRough(rough);
+      }
+    }
+    return n;
+  }
+
+  RoughOcTreeNodeStamped* RoughOcTreeStamped::integrateNodeRough(const OcTreeKey& key,
+                                                   float rough) {
+    RoughOcTreeNodeStamped* n = search (key);
+    if (n != 0) {
+      if (n->isRoughSet()) {
+        float prev_rough = n->getRough();
+        double node_prob = n->getOccupancy();
+        float new_rough = (prev_rough * node_prob
+                           +  rough * (0.99-node_prob));
+        n->setRough(new_rough);
+      }
+      else {
+        n->setRough(rough);
+      }
+    }
+    return n;
+  }
+
+
+  void RoughOcTreeStamped::updateInnerOccupancy() {
+    this->updateInnerOccupancyRecurs(this->root, 0);
+  }
+
+  void RoughOcTreeStamped::updateInnerOccupancyRecurs(RoughOcTreeNodeStamped* node, unsigned int depth) {
+    // only recurse and update for inner nodes:
+    if (nodeHasChildren(node)){
+      // return early for last level:
+      if (depth < this->tree_depth){
+        for (unsigned int i=0; i<8; i++) {
+          if (nodeChildExists(node, i)) {
+            updateInnerOccupancyRecurs(getNodeChild(node, i), depth+1);
+          }
+        }
+      }
+      node->updateOccupancyChildren();
+      node->updateRoughChildren();
+    }
+  }
+
+  void RoughOcTreeStamped::writeRoughHistogram(std::string filename) {
+
+#ifdef _MSC_VER
+    fprintf(stderr, "The rough histogram uses gnuplot, this is not supported under windows.\n");
+#else
+    // build rough histogram
+    int num_bins = 5;
+    std::vector<int> histogram_rough (num_bins,0);
+    for(RoughOcTreeStamped::tree_iterator it = this->begin_tree(),
+          end=this->end_tree(); it!= end; ++it) {
+      if (!it.isLeaf() || !this->isNodeOccupied(*it)) continue;
+      float c = it->getRough();
+      ++histogram_rough[(int)std::min((int)floor(c*num_bins),(int)(num_bins-1))];
+    }
+    // plot data
+    FILE *gui = popen("gnuplot ", "w");
+    fprintf(gui, "set term postscript eps enhanced color\n");
+    fprintf(gui, "set output \"%s\"\n", filename.c_str());
+    fprintf(gui, "plot [-1:%d] ",num_bins);
+    fprintf(gui,"'-' w filledcurve lt 1 lc 1 tit \"r\",");
+    fprintf(gui, "'-' w l lt 1 lc 1 tit \"\",");
+
+    for (int i=0; i<num_bins; ++i) fprintf(gui,"%d %d\n", i, histogram_rough[i]);
+    fprintf(gui,"0 0\n"); fprintf(gui, "e\n");
+    for (int i=0; i<num_bins; ++i) fprintf(gui,"%d %d\n", i, histogram_rough[i]);
+    fprintf(gui, "e\n");
+    fflush(gui);
+#endif
+  }
+
+  // std::ostream& operator<<(std::ostream& out, float const& c) {
+  //   return out << c ;
+  // }
+
+
+  RoughOcTreeStamped::StaticMemberInitializer RoughOcTreeStamped::roughOcTreeStampedMemberInit;
+
+} // end namespace
