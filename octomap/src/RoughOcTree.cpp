@@ -85,7 +85,7 @@ namespace octomap {
   RoughOcTree::RoughOcTree(double in_resolution)
   : OccupancyOcTreeBase<RoughOcTreeNode>(in_resolution) {
     roughOcTreeMemberInit.ensureLinking();
-  };
+  }
 
   RoughOcTreeNode* RoughOcTree::setNodeRough(const OcTreeKey& key,
                                              float rough) {
@@ -195,7 +195,7 @@ namespace octomap {
     fprintf(stderr, "The rough histogram uses gnuplot, this is not supported under windows.\n");
 #else
     // build rough histogram
-    uint num_bins = 5;
+    int num_bins = 5;
     std::vector<int> histogram_rough (num_bins,0);
     for(RoughOcTree::tree_iterator it = this->begin_tree(),
           end=this->end_tree(); it!= end; ++it) {
