@@ -10,35 +10,53 @@
 struct RGBColor{ float r, g, b; };
 inline RGBColor getRGBColor(float ratio)
 {
-    //we want to normalize ratio so that it fits in to 6 regions
-    //where each region is 256 units long
-    int normalized = int(ratio * 255 * 5);
-
-    //find the distance to the start of the closest region
-    int x = normalized % 256;
-
-    int red = 0, grn = 0, blu = 0;
-    switch(normalized / 256)
-    {
-        case 0: red = 255;      grn = x;        blu = 0;       break;//red
-        case 1: red = 255 - x;  grn = 255;      blu = 0;       break;//yellow
-        case 2: red = 0;        grn = 255;      blu = x;       break;//green
-        case 3: red = 0;        grn = 255 - x;  blu = 255;     break;//cyan
-        case 4: red = x;        grn = 0;        blu = 255;     break;//blue
-    }
-
     RGBColor out;
-    out.r = (float)red/255.0;
-    out.g = (float)grn/255.0;
-    out.b = (float)blu/255.0;
+    if(isnan(ratio))
+    {
+      out.r = 0.0;
+      out.g = 0.0;
+      out.b = 0.0;
+    }
+    else
+    {
+      //we want to normalize ratio so that it fits in to 6 regions
+      //where each region is 256 units long
+      int normalized = int(ratio * 255 * 5);
+
+      //find the distance to the start of the closest region
+      int x = normalized % 256;
+
+      int red = 0, grn = 0, blu = 0;
+      switch(normalized / 256)
+      {
+          case 0: red = 255;      grn = x;        blu = 0;       break;//red
+          case 1: red = 255 - x;  grn = 255;      blu = 0;       break;//yellow
+          case 2: red = 0;        grn = 255;      blu = x;       break;//green
+          case 3: red = 0;        grn = 255 - x;  blu = 255;     break;//cyan
+          case 4: red = x;        grn = 0;        blu = 255;     break;//blue
+      }
+      
+      out.r = (float)red/255.0;
+      out.g = (float)grn/255.0;
+      out.b = (float)blu/255.0;
+    }
     return out;
 }
 inline RGBColor getBWColor(float ratio)
 {
     RGBColor out;
-    out.r = ratio;
-    out.g = ratio;
-    out.b = ratio;
+    if(isnan(ratio))
+    {
+      out.r = 1.0;
+      out.g = 0.0;
+      out.b = 0.0;
+    }
+    else
+    {
+      out.r = ratio;
+      out.g = ratio;
+      out.b = ratio;
+    }
     return out;
 }
 
@@ -72,9 +90,9 @@ namespace octomap {
     float getRough() { return rough; }
 
     // RGBColor getRoughColor() { return getRGBColor(getRough()); }
-    RGBColor getRoughColor(float rough_=NAN) { 
-      if (isnan(rough_)) rough_=getRough();
-      return getBWColor(rough_); 
+    RGBColor getRoughColor(/*float rough_=NAN*/) { 
+      // if (isnan(rough_)) rough_=getRough();
+      return getBWColor(getRough()); 
     }
 
     // has any color been integrated? (pure white is very unlikely...)
@@ -126,6 +144,14 @@ namespace octomap {
       OcTreeKey key;
       if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NULL;
       return setNodeRough(key,rough);
+    }
+
+    float getNodeRough(const OcTreeKey& key);
+
+    float getNodeRough(float x, float y, float z) {
+      OcTreeKey key;
+      if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NAN;
+      return getNodeRough(key);
     }
 
     // integrate color measurement at given key or coordinate. Average with previous color
@@ -216,9 +242,8 @@ namespace octomap {
     float getRough() { return rough; }
 
     // RGBColor getRoughColor() { return getRGBColor(getRough()); }
-    RGBColor getRoughColor(float rough_=NAN) { 
-      if (isnan(rough_)) rough_=getRough();
-      return getBWColor(rough_); 
+    RGBColor getRoughColor() { 
+      return getBWColor(getRough()); 
     }
 
     // has any color been integrated? (pure white is very unlikely...)
@@ -270,6 +295,14 @@ namespace octomap {
       OcTreeKey key;
       if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NULL;
       return setNodeRough(key,rough);
+    }
+
+    float getNodeRough(const OcTreeKey& key);
+
+    float getNodeRough(float x, float y, float z) {
+      OcTreeKey key;
+      if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NAN;
+      return getNodeRough(key);
     }
 
     // integrate color measurement at given key or coordinate. Average with previous color

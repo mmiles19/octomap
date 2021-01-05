@@ -87,13 +87,12 @@ namespace octomap {
     roughOcTreeMemberInit.ensureLinking();
   }
 
-  RoughOcTreeNode* RoughOcTree::setNodeRough(const OcTreeKey& key,
-                                             float rough) {
+  float RoughOcTree::getNodeRough(const OcTreeKey& key) {
     RoughOcTreeNode* n = search (key);
     if (n != 0) {
-      n->setRough(rough);
+      return n->getRough();
     }
-    return n;
+    return NAN;
   }
 
   bool RoughOcTree::pruneNode(RoughOcTreeNode* node) {
@@ -134,11 +133,22 @@ namespace octomap {
 
     return true;
   }
+  
+  RoughOcTreeNode* RoughOcTree::setNodeRough(const OcTreeKey& key,
+                                             float rough) {
+    RoughOcTreeNode* n = search (key);
+    if (n != 0) {
+      this->changed_keys.insert(std::pair<OcTreeKey,bool>(key, false));
+      n->setRough(rough);
+    }
+    return n;
+  }
 
   RoughOcTreeNode* RoughOcTree::averageNodeRough(const OcTreeKey& key,
                                                  float rough) {
     RoughOcTreeNode* n = search(key);
     if (n != 0) {
+      this->changed_keys.insert(std::pair<OcTreeKey,bool>(key, false));
       if (n->isRoughSet()) {
         float prev_rough = n->getRough();
         n->setRough((prev_rough + rough)/2);
@@ -154,6 +164,7 @@ namespace octomap {
                                                    float rough) {
     RoughOcTreeNode* n = search (key);
     if (n != 0) {
+      this->changed_keys.insert(std::pair<OcTreeKey,bool>(key, false));
       if (n->isRoughSet()) {
         float prev_rough = n->getRough();
         double node_prob = n->getOccupancy();
@@ -282,13 +293,12 @@ namespace octomap {
     roughOcTreeStampedMemberInit.ensureLinking();
   }
 
-  RoughOcTreeNodeStamped* RoughOcTreeStamped::setNodeRough(const OcTreeKey& key,
-                                             float rough) {
+  float RoughOcTreeStamped::getNodeRough(const OcTreeKey& key) {
     RoughOcTreeNodeStamped* n = search (key);
     if (n != 0) {
-      n->setRough(rough);
+      return n->getRough();
     }
-    return n;
+    return NAN;
   }
 
   bool RoughOcTreeStamped::pruneNode(RoughOcTreeNodeStamped* node) {
@@ -330,10 +340,21 @@ namespace octomap {
     return true;
   }
 
+  RoughOcTreeNodeStamped* RoughOcTreeStamped::setNodeRough(const OcTreeKey& key,
+                                             float rough) {
+    RoughOcTreeNodeStamped* n = search (key);
+    if (n != 0) {
+      this->changed_keys.insert(std::pair<OcTreeKey,bool>(key, false));
+      n->setRough(rough);
+    }
+    return n;
+  }
+
   RoughOcTreeNodeStamped* RoughOcTreeStamped::averageNodeRough(const OcTreeKey& key,
                                                  float rough) {
     RoughOcTreeNodeStamped* n = search(key);
     if (n != 0) {
+      this->changed_keys.insert(std::pair<OcTreeKey,bool>(key, false));
       if (n->isRoughSet()) {
         float prev_rough = n->getRough();
         n->setRough((prev_rough + rough)/2);
@@ -349,6 +370,7 @@ namespace octomap {
                                                    float rough) {
     RoughOcTreeNodeStamped* n = search (key);
     if (n != 0) {
+      this->changed_keys.insert(std::pair<OcTreeKey,bool>(key, false));
       if (n->isRoughSet()) {
         float prev_rough = n->getRough();
         double node_prob = n->getOccupancy();
